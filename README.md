@@ -11,7 +11,11 @@ A production-ready Dockerised environment for running Laravel applications. This
 ## � Quick Start
 ### Automated Setup (Recommended)
 
-The easiest way to get started is with the interactive setup script:
+The easiest way to get started on **dedicated servers, VPS, or local development** is with the interactive setup script.
+
+**Prerequisites:**
+- Docker Engine 20.10+ ([Install Docker](https://docs.docker.com/engine/install/))
+- Docker Compose 2.0+ (included with Docker Desktop)
 
 ```bash
 # Clone the repository
