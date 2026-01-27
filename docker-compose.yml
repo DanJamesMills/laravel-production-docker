@@ -1,0 +1,234 @@
+services:
+  webserver:
+    build:
+      context: ./services/nginx
+      dockerfile: Dockerfile
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    container_name: webserver
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    depends_on:
+      php:
+        condition: service_healthy
+    volumes:
+      - ./config/vhosts:/etc/nginx/conf.d:ro
+      - ./app:/var/www/html:rw
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:80 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    command: >
+      --innodb-buffer-pool-size=${MYSQL_INNODB_BUFFER_POOL_SIZE:-1G}
+      --innodb-log-file-size=${MYSQL_INNODB_LOG_FILE_SIZE:-256M}
+      --innodb-flush-log-at-trx-commit=${MYSQL_INNODB_FLUSH_LOG_AT_TRX_COMMIT:-2}
+      --innodb-flush-method=O_DIRECT
+      --skip-name-resolve
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  php:
+    build:
+      context: ./services/php-fpm/php${PHP_VERSION:-8.4}
+      dockerfile: Dockerfile
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    container_name: php${PHP_VERSION:-8.4}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/var/www/html:rw
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+  horizon:
+    build:
+      context: ./services/php-fpm/php${PHP_VERSION:-8.4}
+      dockerfile: Dockerfile
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    container_name: horizon
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/var/www/html:rw
+    command: >
+      sh -c "
+      if [ ! -f artisan ]; then
+        echo 'Waiting for Laravel application... (artisan not found)';
+        sleep infinity;
+      elif ! grep -q 'laravel/horizon' /var/www/html/composer.json 2>/dev/null; then
+        echo 'Laravel Horizon not installed. Run: composer require laravel/horizon';
+        sleep infinity;
+      else
+        php artisan horizon;
+      fi
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "test ! -f artisan || ! grep -q 'laravel/horizon' /var/www/html/composer.json || php artisan horizon:status | grep -q running"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  scheduler:
+    build:
+      context: ./services/php-fpm/php${PHP_VERSION:-8.4}
+      dockerfile: Dockerfile
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    container_name: scheduler
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/var/www/html:rw
+    command: >
+      sh -c "
+      if [ ! -f artisan ]; then
+        echo 'Waiting for Laravel application... (artisan not found)';
+        sleep infinity;
+      else
+        php artisan schedule:work;
+      fi
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "test ! -f artisan || pidof php > /dev/null"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  redis:
+  mysql_data:

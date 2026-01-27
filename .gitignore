@@ -1,0 +1,38 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Docker
+data/mysql/*
+!data/mysql/.gitkeep
+
+# Laravel Application
+app/vendor/
+app/node_modules/
+app/.env
+app/.env.backup
+app/storage/*.key
+app/storage/logs/*
+app/storage/framework/cache/*
+app/storage/framework/sessions/*
+app/storage/framework/views/*
+app/bootstrap/cache/*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+*.temp
