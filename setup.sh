@@ -53,9 +53,10 @@ check_docker() {
     print_success "Docker and Docker Compose are installed"
 }
 
-# Generate random password
+# Generate random password (avoid shell/env special characters)
 generate_password() {
-    LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*' < /dev/urandom | head -c 32
+    # Only use alphanumeric and safe special chars: !@#-_+=
+    LC_ALL=C tr -dc 'A-Za-z0-9!@#_+=' < /dev/urandom | head -c 32
 }
 
 # Get server RAM configuration
@@ -455,6 +456,10 @@ start_containers() {
     echo -e "\n${GREEN}Starting Docker Containers${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
+    # Remove any existing containers and volumes for fresh start
+    print_info "Removing any existing containers and volumes..."
+    docker compose down -v 2>/dev/null || true
+    
     print_info "Building and starting containers..."
     docker compose up -d --build
     
@@ -541,6 +546,24 @@ display_summary() {
 # Main execution
 main() {
     print_header
+    
+    # Warning about data deletion
+    echo -e "${YELLOW}⚠️  WARNING ⚠️${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${RED}This setup script will:${NC}"
+    echo -e "  ${RED}•${NC} Remove any existing Docker containers"
+    echo -e "  ${RED}•${NC} Delete all Docker volumes (including database data)"
+    echo -e "  ${RED}•${NC} Overwrite .env configuration file"
+    echo ""
+    echo -e "${YELLOW}If you have existing data, back it up before continuing!${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    read -p "Do you want to continue? [y/N]: " confirm_setup
+    if [[ ! $confirm_setup =~ ^[Yy]$ ]]; then
+        print_error "Setup cancelled by user."
+        exit 0
+    fi
+    echo ""
     
     # Check prerequisites
     check_docker
