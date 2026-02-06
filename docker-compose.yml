@@ -90,7 +90,7 @@ services:
     volumes:
       - ./app:/var/www/html:rw
     healthcheck:
-      test: ["CMD-SHELL", "php-fpm -t || exit 1"]
+      test: ["CMD", "sh", "-c", "php-fpm -t || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -158,6 +158,67 @@ get_php_version() {
     done
 }
 
+# Get site name
+get_site_name() {
+    echo -e "\n${GREEN}Site Name Configuration${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Enter a short name for your site (alphanumeric, underscores only)"
+    echo "This will be used as defaults for database name and username"
+    echo "Example: myapp, blog, shop"
+    echo ""
+    
+    while true; do
+        read -p "Site name (default: laravel): " SITE_NAME
+        SITE_NAME=${SITE_NAME:-laravel}
+        
+        # Validate site name (alphanumeric and underscores only)
+        if [[ $SITE_NAME =~ ^[a-zA-Z0-9_]+$ ]]; then
+            print_success "Site name set to: ${SITE_NAME}"
+            break
+        else
+            print_error "Invalid site name. Use only letters, numbers, and underscores."
+        fi
+    done
+}
+
+# Get UID/GID configuration
+get_user_permissions() {
+    echo -e "\n${GREEN}User Permissions Configuration${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Docker containers need to match your system's user ID (UID) and"
+    echo "group ID (GID) to properly access files on your host system."
+    echo ""
+    
+    # Detect current user's UID and GID
+    DETECTED_UID=$(id -u)
+    DETECTED_GID=$(id -g)
+    
+    echo -e "${BLUE}Detected:${NC}"
+    echo "  Your UID: ${DETECTED_UID}"
+    echo "  Your GID: ${DETECTED_GID}"
+    echo ""
+    echo "These values ensure Docker containers can read/write files in"
+    echo "the app directory without permission issues."
+    echo ""
+    
+    read -p "Use detected values? [Y/n]: " use_detected
+    use_detected=${use_detected:-Y}
+    
+    if [[ $use_detected =~ ^[Yy]$ ]]; then
+        USER_ID=$DETECTED_UID
+        GROUP_ID=$DETECTED_GID
+        print_success "Using UID: ${USER_ID}, GID: ${GROUP_ID}"
+    else
+        read -p "Enter UID (default: ${DETECTED_UID}): " USER_ID
+        USER_ID=${USER_ID:-$DETECTED_UID}
+        
+        read -p "Enter GID (default: ${DETECTED_GID}): " GROUP_ID
+        GROUP_ID=${GROUP_ID:-$DETECTED_GID}
+        
+        print_success "Custom UID: ${USER_ID}, GID: ${GROUP_ID}"
+    fi
+}
+
 # Get domain configuration
 get_domain() {
     echo -e "\n${GREEN}Domain Configuration${NC}"
@@ -191,11 +252,15 @@ get_database_credentials() {
     echo -e "\n${GREEN}Database Configuration${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
-    read -p "MySQL Database Name (default: laravel): " MYSQL_DATABASE
-    MYSQL_DATABASE=${MYSQL_DATABASE:-laravel}
+    # Use site name for defaults
+    DEFAULT_DB_NAME="${SITE_NAME}"
+    DEFAULT_DB_USER="${SITE_NAME}_usr"
     
-    read -p "MySQL Username (default: laravel_user): " MYSQL_USER
-    MYSQL_USER=${MYSQL_USER:-laravel_user}
+    read -p "MySQL Database Name (default: ${DEFAULT_DB_NAME}): " MYSQL_DATABASE
+    MYSQL_DATABASE=${MYSQL_DATABASE:-$DEFAULT_DB_NAME}
+    
+    read -p "MySQL Username (default: ${DEFAULT_DB_USER}): " MYSQL_USER
+    MYSQL_USER=${MYSQL_USER:-$DEFAULT_DB_USER}
     
     read -p "Generate secure MySQL password? [Y/n]: " gen_mysql_pass
     gen_mysql_pass=${gen_mysql_pass:-Y}
@@ -222,19 +287,25 @@ save_credentials() {
     # Create credentials directory if it doesn't exist
     mkdir -p credentials
     
-    # Create credentials file with timestamp
-    CREDENTIALS_FILE="credentials/credentials_$(date +%Y%m%d_%H%M%S).txt"
+    # Create credentials file named after the site
+    CREDENTIALS_FILE="credentials/${SITE_NAME}_credentials.txt"
     
     cat > "$CREDENTIALS_FILE" << EOF
 Laravel Production Docker - Credentials
 Generated: $(date)
 ═══════════════════════════════════════════════════════════════
 
-Application Configuration:
+Site Information:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Site Name:        ${SITE_NAME}
 Domain:           ${APP_DOMAIN}
 URL:              ${APP_URL}
 PHP Version:      ${PHP_VERSION}
+
+User Permissions:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UID:              ${USER_ID}
+GID:              ${GROUP_ID}
 
 Database Configuration:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -368,10 +439,6 @@ ask_laravel_installation() {
 create_env_file() {
     echo -e "\n${GREEN}Creating Configuration${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    # Get user UID/GID
-    USER_ID=$(id -u)
-    GROUP_ID=$(id -g)
     
     # Generate Redis password
     REDIS_PASSWORD=$(generate_password)
@@ -658,6 +725,8 @@ main() {
     fi
     
     # Gather configuration
+    get_site_name
+    get_user_permissions
     get_ram_config
     get_php_version
     get_domain

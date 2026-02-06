@@ -1,93 +1,96 @@
-# Use the official PHP 8.4 FPM image
-FROM php:8.4-fpm
+# Use the official PHP 8.4 FPM Alpine image (smaller footprint)
+FROM php:8.4-fpm-alpine
 
 # Get UID/GID from build arguments (default to 1000 if not provided)
 ARG UID=1000
 ARG GID=1000
 
-# CRITICAL FIX: Modify the existing 'www-data' user and group to match the host's UID/GID.
-# This ensures that when the host volume is mounted, the www-data user (which runs PHP-FPM) 
-# has correct read/write permissions on the files.
-# Handle macOS where GID 20 (staff) already exists
-RUN if getent group ${GID} > /dev/null 2>&1; then \
-        # GID exists, add www-data to that group and change user's primary group
-        usermod -u ${UID} www-data && \
-        usermod -g ${GID} www-data; \
-    else \
-        # GID doesn't exist, create it normally
-        usermod -u ${UID} www-data && \
-        groupmod -g ${GID} www-data; \
-    fi
-
-# Set the working directory to the container mount point, /var/www/html
 WORKDIR /var/www/html
 
-# Install system dependencies and PHP extensions in optimized layers
-# Layer 1: Install system packages only
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    unzip \
-    git \
-    libpq-dev \
-    libzip-dev \
-    libonig-dev \
-    libxml2-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libssl-dev \
-    libmcrypt-dev \
-    zlib1g-dev \
-    nodejs \
-    npm \
-    libmagickwand-dev \
-    imagemagick \
-    jpegoptim \
-    optipng \
-    pngquant \
-    gifsicle \
-    webp \
-    libavif-bin \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Layer 2: Install npm global packages separately for better caching
-RUN npm install -g svgo
-
-# Layer 3: Configure and install PHP extensions with parallel builds
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+# Install build dependencies (removed after compilation) and runtime dependencies
+RUN apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
+        postgresql-dev \
+        libzip-dev \
+        oniguruma-dev \
+        libxml2-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        imagemagick-dev \
+        linux-headers \
+        shadow \
+    && apk add --no-cache \
+        curl \
+        unzip \
+        git \
+        libpq \
+        libzip \
+        oniguruma \
+        libxml2 \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        imagemagick \
+        imagemagick-libs \
+        nodejs \
+        npm \
+        jpegoptim \
+        optipng \
+        pngquant \
+        gifsicle \
+        libwebp-tools \
+        libavif-apps \
+        icu-libs \
+        icu-dev \
+    # Modify www-data user/group to match host UID/GID
+    && existing_group=$(getent group ${GID} | cut -d: -f1) \
+    && if [ -n "$existing_group" ] && [ "$existing_group" != "www-data" ]; then \
+        delgroup $existing_group || true; \
+    fi \
+    && groupmod -g ${GID} www-data \
+    && existing_user=$(getent passwd ${UID} | cut -d: -f1) \
+    && if [ -n "$existing_user" ] && [ "$existing_user" != "www-data" ]; then \
+        deluser $existing_user || true; \
+    fi \
+    && usermod -u ${UID} -g ${GID} www-data \
+    # Configure and install PHP extensions
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
-    pdo \
-    pdo_mysql \
-    mysqli \
-    pdo_pgsql \
-    mbstring \
-    zip \
-    exif \
-    gd \
-    bcmath \
-    intl \
-    pcntl \
-    opcache
+        pdo \
+        pdo_mysql \
+        mysqli \
+        pdo_pgsql \
+        mbstring \
+        zip \
+        exif \
+        gd \
+        bcmath \
+        intl \
+        pcntl \
+        opcache \
+    # Install PECL extensions
+    && pecl install redis imagick \
+    && docker-php-ext-enable redis imagick \
+    # Remove build dependencies
+    && apk del .build-deps \
+    && rm -rf /tmp/* /var/cache/apk/*
 
-# Layer 4: Install PECL extensions
-RUN pecl install redis imagick \
-    && docker-php-ext-enable redis imagick
+# Install npm global packages
+RUN npm install -g svgo && npm cache clean --force
 
-# Layer 5: Install Composer using official installer with verification
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
 
-# Ensure the 'www-data' user owns Composer and the application code directory
-RUN chown -R www-data:www-data /usr/local/bin/composer && \
-    chown -R www-data:www-data /var/www
+# Ensure www-data owns Composer and working directory
+RUN chown -R www-data:www-data /usr/local/bin/composer /var/www
 
-# Copy PHP configuration early for better layer caching
+# Copy PHP configuration
 COPY php.ini /usr/local/etc/php/conf.d/dev-server.ini
 
-# Switch to the 'www-data' user (now UID 1000)
+# Switch to www-data user
 USER www-data
 
-# Expose port 9000 for PHP-FPM
 EXPOSE 9000
 
-# Start PHP-FPM server
 CMD ["php-fpm"]

@@ -28,16 +28,35 @@ cd laravel-production-docker
 
 **The setup script will:**
 - ✅ Verify Docker installation
+- ✅ Configure site name (used for database naming)
+- ✅ Detect and configure user permissions (UID/GID)
 - ✅ Select PHP version (8.1, 8.2, 8.3, or 8.4)
 - ✅ Configure MySQL based on your server's RAM (2GB, 4GB, 8GB, 16GB, or custom)
 - ✅ Set up your domain and HTTPS preferences
 - ✅ Generate secure passwords for MySQL and Redis
+- ✅ Save credentials to `credentials/` folder for easy reference
 - ✅ Optionally install a fresh Laravel application
 - ✅ Optionally install Laravel starter kits (React, Vue, or Livewire)
 - ✅ Create and start all Docker containers
 - ✅ Run database migrations (if Laravel installed)
 
 **Setup takes ~5 minutes** and handles all configuration automatically.
+
+### Credentials Storage
+
+After setup completes, all database and Redis credentials are automatically saved to:
+```
+credentials/your-site-name_credentials.txt
+```
+
+This file contains:
+- Site name and domain
+- UID/GID configuration
+- MySQL database name, username, and passwords
+- Redis password
+- Connection strings and useful Docker commands
+
+**Security Note:** The `credentials/` folder is automatically added to `.gitignore` to prevent accidentally committing sensitive information.
 
 ---
 
@@ -186,10 +205,16 @@ Need more details? Jump to these sections:
 ## 🏗 Architecture
 
 - **Webserver:** Nginx (Alpine) - Optimised with gzip, caching, security headers
-- **App Engine:** PHP 8.1/8.2/8.3/8.4 (selectable) with all Laravel extensions (Redis, ImageMagick, GD, etc.)
+- **App Engine:** PHP 8.1/8.2/8.3/8.4-FPM (Alpine) with all Laravel extensions (Redis, ImageMagick, GD, etc.)
 - **Database:** MySQL 8.0 - Default: 1GB buffer pool, tunable for any server size
-- **Cache/Queue:** Redis 7 with AOF persistence
+- **Cache/Queue:** Redis 7 (Alpine) with AOF persistence
 - **Workers:** Laravel Horizon & Scheduler (optional, gracefully wait if Laravel not installed)
+
+**All images use Alpine Linux for:**
+- Smaller image sizes (~50-80MB vs ~400-500MB)
+- Faster builds and deployments
+- Lower disk usage and better security
+- Production-optimized footprint
 
 > **Defaults configured for 4GB RAM servers.** See [PHP Configuration](#-php-extensions--configuration) and [MySQL Tuning](#-mysql-tuning-guide) to customise.
 
