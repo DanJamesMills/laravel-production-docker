@@ -214,6 +214,80 @@ get_database_credentials() {
     print_success "Database credentials configured"
 }
 
+# Save credentials to file
+save_credentials() {
+    echo -e "\n${GREEN}Saving Credentials${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Create credentials directory if it doesn't exist
+    mkdir -p credentials
+    
+    # Create credentials file with timestamp
+    CREDENTIALS_FILE="credentials/credentials_$(date +%Y%m%d_%H%M%S).txt"
+    
+    cat > "$CREDENTIALS_FILE" << EOF
+Laravel Production Docker - Credentials
+Generated: $(date)
+═══════════════════════════════════════════════════════════════
+
+Application Configuration:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Domain:           ${APP_DOMAIN}
+URL:              ${APP_URL}
+PHP Version:      ${PHP_VERSION}
+
+Database Configuration:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Database Name:    ${MYSQL_DATABASE}
+Database User:    ${MYSQL_USER}
+User Password:    ${MYSQL_PASSWORD}
+Root Password:    ${MYSQL_ROOT_PASSWORD}
+
+Database Host (internal):  mysql
+Database Host (external):  localhost:3306
+
+Redis Configuration:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Redis Host:       redis (internal) or localhost:6379 (external)
+Redis Password:   ${REDIS_PASSWORD}
+
+MySQL Performance Settings:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+InnoDB Buffer Pool:  ${MYSQL_INNODB_BUFFER_POOL_SIZE}
+InnoDB Log File:     ${MYSQL_INNODB_LOG_FILE_SIZE}
+Max Connections:     200
+
+⚠️  IMPORTANT SECURITY NOTES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Store this file securely and do not commit it to version control
+• The credentials/ directory is added to .gitignore
+• Change these passwords if this file is ever compromised
+• For production, consider using a password manager or secrets vault
+
+Useful Docker Commands:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+docker compose ps                 # Check container status
+docker compose logs -f php        # View PHP logs
+docker compose exec php bash      # Access PHP container
+docker compose exec mysql mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} ${MYSQL_DATABASE}
+docker compose down               # Stop all containers
+docker compose up -d              # Start all containers
+
+EOF
+
+    # Add credentials directory to .gitignore
+    if [ ! -f ".gitignore" ]; then
+        echo "credentials/" > .gitignore
+        print_success "Created .gitignore with credentials/ directory"
+    elif ! grep -q "credentials/" .gitignore 2>/dev/null; then
+        echo "credentials/" >> .gitignore
+        print_success "Added credentials/ to .gitignore"
+    fi
+    
+    print_success "Credentials saved to: ${CREDENTIALS_FILE}"
+    print_warning "Keep this file secure and do not commit it to version control!"
+}
+
 # Ask about Laravel starter kit
 ask_starter_kit() {
     echo -e "\n${GREEN}Laravel Starter Kit${NC}"
@@ -362,6 +436,9 @@ TZ=UTC
 EOF
 
     print_success "Created .env file with your configuration"
+    
+    # Save credentials to credentials folder
+    save_credentials
     
     # Update nginx vhost config with domain
     print_info "Updating nginx configuration with domain: ${APP_DOMAIN}"
@@ -519,6 +596,8 @@ display_summary() {
     echo -e "MySQL User Password:  ${MYSQL_PASSWORD}"
     echo -e "MySQL Root Password:  ${MYSQL_ROOT_PASSWORD}"
     echo -e "Redis Password:       ${REDIS_PASSWORD}"
+    echo ""
+    echo -e "${GREEN}✓ Credentials have been saved to the credentials/ folder${NC}"
     echo ""
     
     echo -e "${BLUE}Useful Commands:${NC}"
