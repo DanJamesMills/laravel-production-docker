@@ -85,8 +85,9 @@ COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
 # Ensure www-data owns Composer and working directory
 RUN chown -R www-data:www-data /usr/local/bin/composer /var/www
 
-# Copy PHP configuration
-COPY php.ini /usr/local/etc/php/conf.d/dev-server.ini
+# Copy PHP and FPM configuration
+COPY php8.4/php.ini /usr/local/etc/php/conf.d/dev-server.ini
+COPY www.conf /usr/local/etc/php-fpm.d/www.conf
 
 # Switch to www-data user
 USER www-data

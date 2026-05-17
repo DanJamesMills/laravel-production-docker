@@ -75,8 +75,8 @@ services:
 
   php:
     build:
-      context: ./services/php-fpm/php${PHP_VERSION:-8.4}
-      dockerfile: Dockerfile
+      context: ./services/php-fpm
+      dockerfile: php${PHP_VERSION:-8.4}/Dockerfile
       args:
         UID: "${UID:-1000}"
         GID: "${GID:-1000}"
@@ -111,8 +111,8 @@ services:
 
   horizon:
     build:
-      context: ./services/php-fpm/php${PHP_VERSION:-8.4}
-      dockerfile: Dockerfile
+      context: ./services/php-fpm
+      dockerfile: php${PHP_VERSION:-8.4}/Dockerfile
       args:
         UID: "${UID:-1000}"
         GID: "${GID:-1000}"
@@ -159,8 +159,8 @@ services:
 
   scheduler:
     build:
-      context: ./services/php-fpm/php${PHP_VERSION:-8.4}
-      dockerfile: Dockerfile
+      context: ./services/php-fpm
+      dockerfile: php${PHP_VERSION:-8.4}/Dockerfile
       args:
         UID: "${UID:-1000}"
         GID: "${GID:-1000}"
@@ -206,7 +206,7 @@ services:
     image: redis:7-alpine
     container_name: redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --appendfsync everysec
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --appendfsync everysec
     volumes:
       - redis:/data
     healthcheck:
