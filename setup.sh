@@ -516,11 +516,10 @@ EOF
     # Save credentials to credentials folder
     save_credentials
     
-    # Update nginx vhost config with domain
-    print_info "Updating nginx configuration with domain: ${APP_DOMAIN}"
-    sed -i.bak "s/server_name .*/server_name ${APP_DOMAIN};/" config/vhosts/default.conf
-    rm -f config/vhosts/default.conf.bak
-    print_success "Nginx configuration updated"
+    # Generate nginx vhost config from template
+    print_info "Generating nginx configuration for domain: ${APP_DOMAIN}"
+    sed "s/server_name example.com;/server_name ${APP_DOMAIN};/" config/vhosts/default.conf.template > config/vhosts/default.conf
+    print_success "Nginx configuration generated"
     
     # Create app/.env if installing Laravel
     if [ "$INSTALL_LARAVEL" = true ]; then
@@ -593,6 +592,15 @@ install_laravel() {
         # Update APP_URL
         docker compose run --rm php sh -c "cd /var/www/html && \
             sed -i \"s|^APP_URL=.*|APP_URL=${APP_URL}|\" .env"
+
+        # Configure Redis to use Docker service name and generated password
+        docker compose run --rm php sh -c "cd /var/www/html && \
+            sed -i 's|^REDIS_HOST=.*|REDIS_HOST=redis|' .env && \
+            sed -i 's|^REDIS_PORT=.*|REDIS_PORT=6379|' .env && \
+            sed -i \"s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_PASSWORD}|\" .env && \
+            sed -i 's|^SESSION_DRIVER=.*|SESSION_DRIVER=redis|' .env && \
+            sed -i 's|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=redis|' .env && \
+            sed -i 's|^CACHE_STORE=.*|CACHE_STORE=redis|' .env"
         
         # Generate app key
         print_info "Generating application key..."
