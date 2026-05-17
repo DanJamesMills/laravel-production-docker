@@ -53,10 +53,18 @@ check_docker() {
     print_success "Docker and Docker Compose are installed"
 }
 
-# Generate random password (avoid shell/env special characters)
+# Generate random password (alphanumeric + @ only for broad compatibility)
 generate_password() {
-    # Only use alphanumeric and safe special chars: !@#-_+=
-    LC_ALL=C tr -dc 'A-Za-z0-9!@#_+=' < /dev/urandom | head -c 32
+    LC_ALL=C tr -dc 'A-Za-z0-9@' < /dev/urandom | head -c 32
+}
+
+# Convert a string to snake_case (handles CamelCase, spaces, hyphens)
+to_snake_case() {
+    echo "$1" \
+        | sed 's/\([a-z0-9]\)\([A-Z]\)/\1_\2/g' \
+        | tr '[:upper:] -' '[:lower:]__' \
+        | sed 's/__*/_/g' \
+        | sed 's/^_//;s/_$//'
 }
 
 # Get server RAM configuration
@@ -168,15 +176,16 @@ get_site_name() {
     echo ""
     
     while true; do
-        read -p "Site name (default: laravel): " SITE_NAME
-        SITE_NAME=${SITE_NAME:-laravel}
+        read -p "Site name (default: laravel): " SITE_NAME_INPUT
+        SITE_NAME_INPUT=${SITE_NAME_INPUT:-laravel}
         
-        # Validate site name (alphanumeric and underscores only)
-        if [[ $SITE_NAME =~ ^[a-zA-Z0-9_]+$ ]]; then
+        # Allow letters, numbers, spaces, hyphens, and underscores; convert to snake_case
+        if [[ $SITE_NAME_INPUT =~ ^[a-zA-Z0-9_' '-]+$ ]]; then
+            SITE_NAME=$(to_snake_case "$SITE_NAME_INPUT")
             print_success "Site name set to: ${SITE_NAME}"
             break
         else
-            print_error "Invalid site name. Use only letters, numbers, and underscores."
+            print_error "Invalid site name. Use only letters, numbers, spaces, hyphens, and underscores."
         fi
     done
 }
@@ -253,7 +262,7 @@ get_database_credentials() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     # Use site name for defaults
-    DEFAULT_DB_NAME="${SITE_NAME}"
+    DEFAULT_DB_NAME="${SITE_NAME}_db"
     DEFAULT_DB_USER="${SITE_NAME}_usr"
     
     read -p "MySQL Database Name (default: ${DEFAULT_DB_NAME}): " MYSQL_DATABASE
@@ -577,11 +586,9 @@ install_laravel() {
             sed -i \"s/^DB_DATABASE=.*/DB_DATABASE=${MYSQL_DATABASE}/\" .env && \
             sed -i \"s/^DB_USERNAME=.*/DB_USERNAME=${MYSQL_USER}/\" .env"
         
-        # Handle password with special characters by using a temp file
+        # Set DB password in-place so it stays with the other DB_ variables
         docker compose run --rm php sh -c "cd /var/www/html && \
-            grep -v '^DB_PASSWORD=' .env > .env.tmp && \
-            echo \"DB_PASSWORD=${MYSQL_PASSWORD}\" >> .env.tmp && \
-            mv .env.tmp .env"
+            sed -i \"s|^DB_PASSWORD=.*|DB_PASSWORD=${MYSQL_PASSWORD}|\" .env"
         
         # Update APP_URL
         docker compose run --rm php sh -c "cd /var/www/html && \
@@ -595,14 +602,80 @@ install_laravel() {
     fi
 }
 
+# Detect existing setup and clean everything up before starting
+detect_and_cleanup() {
+    local has_containers=false
+    local has_env=false
+    local has_credentials=false
+    local has_app=false
+    local needs_cleanup=false
+
+    if docker compose ps -q 2>/dev/null | grep -q .; then
+        has_containers=true
+        needs_cleanup=true
+    fi
+
+    if [ -f ".env" ]; then
+        has_env=true
+        needs_cleanup=true
+    fi
+
+    if [ -d "credentials" ] && ls credentials/*.txt 2>/dev/null | grep -q .; then
+        has_credentials=true
+        needs_cleanup=true
+    fi
+
+    if [ -f "app/public/index.php" ]; then
+        has_app=true
+        needs_cleanup=true
+    fi
+
+    if [ "$needs_cleanup" = true ]; then
+        echo -e "\n${YELLOW}Existing Setup Detected${NC}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "The following will be removed before setup begins:"
+        [ "$has_containers" = true ] && echo -e "  ${RED}•${NC} Running Docker containers and volumes"
+        [ "$has_env" = true ]         && echo -e "  ${RED}•${NC} Existing .env configuration file"
+        [ "$has_credentials" = true ] && echo -e "  ${RED}•${NC} Existing credentials files"
+        [ "$has_app" = true ]         && echo -e "  ${RED}•${NC} Existing Laravel app in ./app"
+        echo ""
+        echo -e "${RED}Back up anything you need before continuing!${NC}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        read -p "Continue and remove existing setup? [y/N]: " confirm_cleanup
+        if [[ ! $confirm_cleanup =~ ^[Yy]$ ]]; then
+            print_error "Setup cancelled."
+            exit 0
+        fi
+
+        if [ "$has_containers" = true ]; then
+            print_info "Stopping and removing Docker containers and volumes..."
+            docker compose down -v 2>/dev/null || true
+            print_success "Docker containers and volumes removed"
+        fi
+
+        if [ "$has_env" = true ]; then
+            rm -f .env
+            print_success ".env file removed"
+        fi
+
+        if [ "$has_credentials" = true ]; then
+            rm -f credentials/*.txt
+            print_success "Credentials folder cleared"
+        fi
+
+        if [ "$has_app" = true ]; then
+            print_info "Clearing existing app directory..."
+            rm -rf ./app/* ./app/.[!.]*
+            print_success "App directory cleared"
+        fi
+    fi
+}
+
 # Start containers
 start_containers() {
     echo -e "\n${GREEN}Starting Docker Containers${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    # Remove any existing containers and volumes for fresh start
-    print_info "Removing any existing containers and volumes..."
-    docker compose down -v 2>/dev/null || true
     
     print_info "Building and starting containers..."
     docker compose up -d --build
@@ -713,16 +786,9 @@ main() {
     
     # Check prerequisites
     check_docker
-    
-    # Check if .env already exists
-    if [ -f ".env" ]; then
-        print_warning ".env file already exists"
-        read -p "Do you want to overwrite it? [y/N]: " overwrite
-        if [[ ! $overwrite =~ ^[Yy]$ ]]; then
-            print_error "Setup cancelled. Remove or rename .env to run setup again."
-            exit 1
-        fi
-    fi
+
+    # Detect and clean up any existing setup before asking questions
+    detect_and_cleanup
     
     # Gather configuration
     get_site_name

@@ -7,17 +7,35 @@
 data/mysql/*
 !data/mysql/.gitkeep
 
-# Laravel Application
-app/vendor/
-app/node_modules/
+# Laravel Application (files installed by setup.sh - not part of this repo)
+app/.editorconfig
 app/.env
 app/.env.backup
-app/storage/*.key
-app/storage/logs/*
-app/storage/framework/cache/*
-app/storage/framework/sessions/*
-app/storage/framework/views/*
-app/bootstrap/cache/*
+app/.env.example
+app/.gitattributes
+app/.gitignore
+app/.npmrc
+app/README.md
+app/app/
+app/artisan
+app/bootstrap/
+app/composer.json
+app/composer.lock
+app/config/
+app/database/
+app/node_modules/
+app/package.json
+app/package-lock.json
+app/phpunit.xml
+app/public/.htaccess
+app/public/favicon.ico
+app/public/robots.txt
+app/resources/
+app/routes/
+app/storage/
+app/tests/
+app/vendor/
+app/vite.config.js
 
 # IDE
 .idea/
