@@ -76,6 +76,9 @@ RUN apk add --no-cache --virtual .build-deps \
     && apk del .build-deps \
     && rm -rf /tmp/* /var/cache/apk/*
 
+# Install Chromium for the application's Browsershot/Puppeteer screenshots.
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+
 # Install npm global packages
 RUN npm install -g svgo && npm cache clean --force
 

@@ -37,7 +37,9 @@ server {
 
     # Only index.php may execute PHP
     location ~ ^/index\.php(/|$) {
-        fastcgi_pass php:9000;
+        resolver 127.0.0.11 valid=10s;
+        set $php_backend php:9000;
+        fastcgi_pass $php_backend;
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;

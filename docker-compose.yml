@@ -17,7 +17,7 @@ services:
       - ./config/vhosts:/etc/nginx/conf.d:ro
       - ./app:/var/www/html:rw
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:80 || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:80/up || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -93,6 +93,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/var/www/html:rw
+      - ./.health:/var/run/webmapr-health:ro
     healthcheck:
       test: ["CMD", "sh", "-c", "php-fpm -t || exit 1"]
       interval: 30s
@@ -114,6 +115,8 @@ services:
           memory: 512M
 
   horizon:
+    init: true
+    stop_grace_period: 1h
     build:
       context: ./services/php-fpm
       dockerfile: php${PHP_VERSION:-8.4}/Dockerfile
@@ -162,6 +165,7 @@ services:
           memory: 256M
 
   scheduler:
+    init: true
     build:
       context: ./services/php-fpm
       dockerfile: php${PHP_VERSION:-8.4}/Dockerfile
@@ -202,9 +206,42 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+          pids: 512
         reservations:
           cpus: '0.25'
           memory: 128M
+
+  reverb:
+    build:
+      context: ./services/php-fpm
+      dockerfile: php${PHP_VERSION:-8.4}/Dockerfile
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    container_name: reverb
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/var/www/html:rw
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080 --no-interaction
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$$socket = @fsockopen(\"127.0.0.1\", 8080); exit($$socket ? 0 : 1);'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   redis:
     image: redis:7-alpine
@@ -243,7 +280,7 @@ services:
     volumes:
       - meilisearch_data:/meili_data
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7700/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:7700/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

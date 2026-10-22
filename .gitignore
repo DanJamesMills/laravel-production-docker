@@ -57,3 +57,13 @@ Thumbs.db
 *.tmp
 *.temp
 credentials/
+
+/app/
+
+/.health/
+
+/.health-collector.lock
+
+__pycache__/
+
+*.py[cod]
