@@ -13,6 +13,8 @@ services:
     depends_on:
       php:
         condition: service_healthy
+      reverb:
+        condition: service_healthy
     volumes:
       - ./config/vhosts:/etc/nginx/conf.d:ro
       - ./app:/var/www/html:rw
@@ -161,6 +163,43 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  reverb:
+    build:
+      context: ./services/php-fpm
+      dockerfile: php${PHP_VERSION:-8.4}/Dockerfile
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    container_name: reverb
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/var/www/html:rw
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 8080) ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
   scheduler:
     build:
       context: ./services/php-fpm
@@ -238,12 +277,12 @@ services:
     container_name: meilisearch
     restart: unless-stopped
     environment:
-      - MEILI_MASTER_KEY=${MEILISEARCH_MASTER_KEY:-changeme}
+      - MEILI_MASTER_KEY=${MEILISEARCH_MASTER_KEY:?Set MEILISEARCH_MASTER_KEY in the root .env}
       - MEILI_ENV=production
     volumes:
       - meilisearch_data:/meili_data
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7700/health || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:7700/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

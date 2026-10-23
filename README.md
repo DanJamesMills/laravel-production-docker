@@ -363,6 +363,10 @@ This stack includes **Laravel Horizon** and **Laravel Scheduler** containers. Th
 
 ### Laravel Horizon (Queue Worker)
 
+PhoneEnvoy also runs Laravel Reverb for live browser updates, with a dedicated
+Horizon worker for broadcasts. Configuration, team authorisation and deployment
+instructions are in [Live updates](app/docs/REALTIME.md).
+
 **What it is:** Laravel Horizon provides a dashboard and configuration for Redis queues.
 
 **When you need it:**

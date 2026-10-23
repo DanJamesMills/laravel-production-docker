@@ -9,6 +9,7 @@ data/mysql/*
 config/vhosts/default.conf
 
 # Laravel Application (files installed by setup.sh - not part of this repo)
+/app/
 app/public/index.php
 app/.editorconfig
 app/.env
